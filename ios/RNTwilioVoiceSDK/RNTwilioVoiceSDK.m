@@ -11,6 +11,7 @@
 @interface RNTwilioVoiceSDK () <TVOCallDelegate>
 
 @property (nonatomic, strong) TVOCall *call;
+@property (nonatomic,strong)AVAudioPlayer *player;
 @end
 
 @implementation RNTwilioVoiceSDK {
@@ -70,6 +71,20 @@ RCT_REMAP_METHOD(connect,
 
       self.call = [TwilioVoice connectWithOptions:connectOptions delegate:self];
       NSMutableDictionary *params = [self callParamsFor:self.call];
+      @try {
+        NSError *error;
+        NSURL *fileNameUrl;
+        AVAudioPlayer *player;
+        
+        NSBundle *bundle = [NSBundle bundleForClass:[self class]];
+        NSURL* ringSound = [bundle URLForResource:@"dial_2" withExtension:@"mp3"];
+        self.player = [[AVAudioPlayer alloc]initWithContentsOfURL:ringSound error:NULL];
+        self.player.numberOfLoops = -1; //Infinite
+        [self.player play];
+      }
+      @catch (NSException *exception) {
+          NSLog(@"%@", exception.reason);
+      }
       resolve(params);
     // [self performStartCallActionWithUUID:uuid handle:handle];
   }
@@ -80,6 +95,7 @@ RCT_EXPORT_METHOD(disconnect) {
     self.call.muted = false;
     [self toggleAudioRoute:false];
     [self disableProximityMonitoring];
+    [self.player stop];
     [self.call disconnect];
 }
 
@@ -186,7 +202,7 @@ RCT_REMAP_METHOD(getActiveCall,
 
 - (void)callDidConnect:(TVOCall *)call {
   self.call = call;
-
+  [self.player stop];
   NSMutableDictionary *callParams = [self callParamsFor:call];
   [self sendEventWithName:@"connect" body:callParams];
 }

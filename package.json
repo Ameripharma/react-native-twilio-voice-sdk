@@ -1,6 +1,6 @@
 {
-  "name": "react-native-twilio-voice-sdk",
-  "version": "0.5.1",
+  "name": "@nowrx/react-native-twilio-voice-sdk",
+  "version": "0.5.2",
   "description": "React Native wrapper for Twilio Programmable Voice SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,7 +14,7 @@
     "react-native": "^0.60.4",
     "typescript": "^3.5.3"
   },
-  "homepage": "https://github.com/elyalvarado/react-native-twilio-voice-sdk",
+  "homepage": "https://github.com/NowRx/react-native-twilio-voice-sdk",
   "keywords": [
     "twilio",
     "react-native",
@@ -28,15 +28,12 @@
     "gcm",
     "fcm"
   ],
-  "bugs": {
-    "url": "https://github.com/elyalvarado/react-native-twilio-voice-sdk/issues"
-  },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com:elyalvarado/react-native-twilio-voice-sdk.git"
+    "url": "git@github.com:NowRx/react-native-twilio-voice-sdk.git"
   },
   "author": {
-    "name": "Ely Alvarado"
+    "name": "Nowrx"
   },
   "license": "MIT",
   "peerDependencies": {

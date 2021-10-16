@@ -25,6 +25,13 @@ import com.twilio.voice.ConnectOptions;
 import com.twilio.voice.LogLevel;
 import com.twilio.voice.Voice;
 
+import android.media.MediaPlayer;
+import android.media.AudioManager;
+import android.content.res.AssetFileDescriptor;
+import android.content.Context;
+import java.io.IOException;
+import java.io.File;
+
 import java.util.HashMap;
 
 import static com.happytheapp.react.RNTwilioVoiceSDK.EventManager.EVENT_RINGING;
@@ -35,7 +42,7 @@ import static com.happytheapp.react.RNTwilioVoiceSDK.EventManager.EVENT_RECONNEC
 import static com.happytheapp.react.RNTwilioVoiceSDK.EventManager.EVENT_DISCONNECTED;
 
 
-public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule implements LifecycleEventListener {
+public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule implements LifecycleEventListener, AudioManager.OnAudioFocusChangeListener  {
 
     public static String TAG = "RNTwilioVoiceSDK";
 
@@ -44,6 +51,8 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule implements 
     private AudioFocusManager audioFocusManager;
     private ProximityManager proximityManager;
     private EventManager eventManager;
+    protected MediaPlayer mediaPlayer;
+    ReactApplicationContext context;
 
     public TwilioVoiceSDKModule(ReactApplicationContext reactContext) {
         super(reactContext);
@@ -53,7 +62,7 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule implements 
             Voice.setLogLevel(LogLevel.ERROR);
         }
         reactContext.addLifecycleEventListener(this);
-
+        context = reactContext;
         eventManager = new EventManager(reactContext);
         audioFocusManager = new AudioFocusManager(reactContext);
         proximityManager = new ProximityManager(reactContext);
@@ -99,6 +108,9 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule implements 
                 }
                 activeCall = call;
                 eventManager.sendEvent(EVENT_CONNECTED, paramsFromCall(call));
+
+                mediaPlayer.pause();
+                mediaPlayer.seekTo(0);
             }
 
             @Override
@@ -150,15 +162,110 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule implements 
                     Log.d(TAG, "ringing");
                 }
                 activeCall = call;
-                audioFocusManager.setAudioFocus();
+                // audioFocusManager.setAudioFocus();
                 eventManager.sendEvent(EVENT_RINGING, paramsFromCall(call));
             }
         };
     }
 
+    @Override
+    public void onAudioFocusChange(int focusChange) {
+        
+    }
+
+    protected MediaPlayer createMediaPlayer(final String fileName) {
+        int res = this.context.getResources().getIdentifier(fileName, "raw", this.context.getPackageName());
+        MediaPlayer mediaPlayer = new MediaPlayer();
+        if (res != 0) {
+          try {
+            AssetFileDescriptor afd = this.context.getResources().openRawResourceFd(res);
+            mediaPlayer.setDataSource(afd.getFileDescriptor(), afd.getStartOffset(), afd.getLength());
+            afd.close();
+          } catch (IOException e) {
+            Log.e("RNSoundModule", "Exception", e);
+            return null;
+          }
+          return mediaPlayer;
+        }
+    
+        if (fileName.startsWith("http://") || fileName.startsWith("https://")) {
+          mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
+          Log.i("RNSoundModule", fileName);
+          try {
+            mediaPlayer.setDataSource(fileName);
+          } catch(IOException e) {
+            Log.e("RNSoundModule", "Exception", e);
+            return null;
+          }
+          return mediaPlayer;
+        }
+    
+        if (fileName.startsWith("asset:/")){
+            try {
+                AssetFileDescriptor descriptor = this.context.getAssets().openFd(fileName.replace("asset:/", ""));
+                mediaPlayer.setDataSource(descriptor.getFileDescriptor(), descriptor.getStartOffset(), descriptor.getLength());
+                descriptor.close();
+                return mediaPlayer;
+            } catch(IOException e) {
+                Log.e("RNSoundModule", "Exception", e);
+                return null;
+            }
+        }
+    
+        if (fileName.startsWith("file:/")){
+          try {
+            mediaPlayer.setDataSource(fileName);
+          } catch(IOException e) {
+            Log.e("RNSoundModule", "Exception", e);
+            return null;
+          }
+          return mediaPlayer;
+        }
+        
+        File file = new File(fileName);
+        if (file.exists()) {
+          mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
+          Log.i("RNSoundModule", fileName);
+          try {
+              mediaPlayer.setDataSource(fileName);
+          } catch(IOException e) {
+              Log.e("RNSoundModule", "Exception", e);
+              return null;
+          }
+          return mediaPlayer;
+        }
+    
+        return null;
+      }
+
+
+
+
 
     @ReactMethod
     public void connect(final String accessToken, ReadableMap params, Promise promise) {
+        
+        this.mediaPlayer = this.createMediaPlayer("dial_2");
+        try {
+            this.mediaPlayer.prepare();
+          } catch (Exception ignored) {
+            // When loading files from a file, we useMediaPlayer.create, which actually
+            // prepares the audio for us already. So we catch and ignore this error
+            Log.e("RNSoundModule", "Exception", ignored);
+          }
+        
+          Boolean speaker = false;
+          AudioManager audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+          audioManager.requestAudioFocus(this, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
+          if(speaker){
+              audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
+            }else{
+                audioManager.setMode(AudioManager.STREAM_MUSIC);
+            }
+            audioManager.setSpeakerphoneOn(speaker);
+            this.mediaPlayer.setLooping(true);
+            this.mediaPlayer.start();
+
         if (BuildConfig.DEBUG) {
             Log.d(TAG, "connect params: "+params);
         }
@@ -210,6 +317,8 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule implements 
     @ReactMethod
     public void disconnect() {
         if (activeCall != null) {
+            mediaPlayer.pause();
+            mediaPlayer.seekTo(0);
             setMuted(false);
             disableSpeakerPhone();
             proximityManager.stopProximitySensor();
@@ -251,12 +360,14 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule implements 
 
     @ReactMethod
     public void setSpeakerPhone(Boolean value) {
-        audioFocusManager.setSpeakerPhone(value);
-        if(value) {
-            proximityManager.stopProximitySensor();
-        } else {
-            proximityManager.startProximitySensor();
-        }
+        AudioManager audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+        audioManager.requestAudioFocus(this, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
+        if(value){
+            audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
+          }else{
+              audioManager.setMode(AudioManager.STREAM_MUSIC);
+          }
+          audioManager.setSpeakerphoneOn(value);
     }
 
     private void disableSpeakerPhone() {
