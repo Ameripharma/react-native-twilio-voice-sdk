@@ -149,6 +149,8 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule implements 
                     Log.d(TAG, "connect failure");
                 }
                 activeCall = call;
+                mediaPlayer.pause();
+                mediaPlayer.seekTo(0);
                 audioFocusManager.unsetAudioFocus();
                 WritableMap params = paramsWithError(call, error);
                 call.disconnect();
@@ -162,7 +164,6 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule implements 
                     Log.d(TAG, "ringing");
                 }
                 activeCall = call;
-                // audioFocusManager.setAudioFocus();
                 eventManager.sendEvent(EVENT_RINGING, paramsFromCall(call));
             }
         };
@@ -263,8 +264,6 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule implements 
                 audioManager.setMode(AudioManager.STREAM_MUSIC);
             }
             audioManager.setSpeakerphoneOn(speaker);
-            this.mediaPlayer.setLooping(true);
-            this.mediaPlayer.start();
 
         if (BuildConfig.DEBUG) {
             Log.d(TAG, "connect params: "+params);
@@ -305,12 +304,12 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule implements 
 
         ConnectOptions connectOptions = new ConnectOptions.Builder(accessToken)
                 .params(twiMLParams)
-                // .iceOptions()
-                // .preferAudioCodecs()
-                // .enableInsights()
-                // .region()
                 .build();
         activeCall = Voice.connect(getReactApplicationContext(), connectOptions, callListener);
+        if(activeCall != null) {
+            this.mediaPlayer.setLooping(true);
+            this.mediaPlayer.start();
+        }
         promise.resolve(paramsFromCall(activeCall));
     }
 

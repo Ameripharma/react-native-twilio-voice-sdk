@@ -213,6 +213,7 @@ RCT_REMAP_METHOD(getActiveCall,
   self.call = call;
   NSMutableDictionary *callParams = [self paramsForError:error];
   [self sendEventWithName:@"connectFailure" body:callParams];
+  [self.player stop];
   [self disconnect];
   self.call = nil;
 }
