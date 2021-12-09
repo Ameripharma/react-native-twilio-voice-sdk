@@ -48,11 +48,8 @@ RCT_REMAP_METHOD(connect,
                  options:(NSDictionary *)options
                  connectResolver:(RCTPromiseResolveBlock)resolve
                  rejecter:(RCTPromiseRejectBlock)reject) {
-//  NSLog(@"Calling phone number %@", [params valueForKey:@"To"]);
-//  [TwilioVoice setLogLevel:TVOLogLevelVerbose];
 
   if (self.call) {
-//    [self.call disconnect];
     reject(@"already_connected",@"Calling connect while a call is connected",nil);
   } else {
       [self enableProximityMonitoring];
@@ -61,12 +58,6 @@ RCT_REMAP_METHOD(connect,
       TVOConnectOptions *connectOptions = [TVOConnectOptions optionsWithAccessToken:accessToken
                                                                               block:^(TVOConnectOptionsBuilder *builder) {
                                                                                   builder.params = options;
-                                                                                  builder.uuid = uuid;
-//                                                                                  builder.region = region;
-//                                                                                  builder.iceOptions = ;
-//                                                                                  builder.preferredAudioCodecs = ;
-//                                                                                  builder.delegateQueue = ;
-
                                                                               }];
 
       self.call = [TwilioVoice connectWithOptions:connectOptions delegate:self];

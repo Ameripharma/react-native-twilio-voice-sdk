@@ -15,5 +15,5 @@ Pod::Spec.new do |s|
   s.source = {:path => "./RNTwilioVoiceSDK"}
   s.resources = 'ios/Assets/*'
   s.dependency 'React'
-  s.dependency 'TwilioVoice', '~> 4.1'
+  s.dependency 'TwilioVoice', '~> 6.3.0'
 end
