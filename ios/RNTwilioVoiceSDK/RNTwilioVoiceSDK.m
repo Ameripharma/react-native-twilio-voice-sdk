@@ -60,7 +60,7 @@ RCT_REMAP_METHOD(connect,
                                                                                   builder.params = options;
                                                                               }];
 
-      self.call = [TwilioVoice connectWithOptions:connectOptions delegate:self];
+      self.call = [TwilioVoiceSDK connectWithOptions:connectOptions delegate:self];
       NSMutableDictionary *params = [self callParamsFor:self.call];
       @try {
         NSError *error;
@@ -109,7 +109,7 @@ RCT_EXPORT_METHOD(sendDigits: (NSString *)digits){
 RCT_REMAP_METHOD(getVersion,
                  getVersionResolver:(RCTPromiseResolveBlock)resolve
                  rejecter:(RCTPromiseRejectBlock)reject){
-  resolve(TwilioVoice.sdkVersion);
+  resolve(TwilioVoiceSDK.sdkVersion);
 }
 
 RCT_REMAP_METHOD(getActiveCall,
