@@ -83,19 +83,14 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule
         audioSwitch.start(new Function2<List<? extends AudioDevice>, AudioDevice, Unit>() {
             @Override
             public Unit invoke(List<? extends AudioDevice> audioDevices, AudioDevice audioDevice) {
-                // manipulateAudioManagerBasedOnBLE();
                 return Unit.INSTANCE;
             }
         });
-
     }
 
     // region Lifecycle Event Listener
     @Override
     public void onHostResume() {
-
-        // BluetoothAdapter.getDefaultAdapter().getProfileProxy(context,
-        // mProfileListener, BluetoothProfile.HEADSET);
         /*
          * Enable changing the volume using the up/down keys during a conversation
          */
@@ -114,6 +109,7 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule
     public void onHostDestroy() {
         disconnect();
         audioFocusManager.unsetAudioFocus();
+        audioSwitch.stop();
     }
     // endregion
 
