@@ -201,54 +201,6 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule
             return mediaPlayer;
         }
 
-        if (fileName.startsWith("http://") || fileName.startsWith("https://")) {
-            mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
-            Log.i("RNSoundModule", fileName);
-            try {
-                mediaPlayer.setDataSource(fileName);
-            } catch (IOException e) {
-                Log.e("RNSoundModule", "Exception", e);
-                return null;
-            }
-            return mediaPlayer;
-        }
-
-        if (fileName.startsWith("asset:/")) {
-            try {
-                AssetFileDescriptor descriptor = this.context.getAssets().openFd(fileName.replace("asset:/", ""));
-                mediaPlayer.setDataSource(descriptor.getFileDescriptor(), descriptor.getStartOffset(),
-                        descriptor.getLength());
-                descriptor.close();
-                return mediaPlayer;
-            } catch (IOException e) {
-                Log.e("RNSoundModule", "Exception", e);
-                return null;
-            }
-        }
-
-        if (fileName.startsWith("file:/")) {
-            try {
-                mediaPlayer.setDataSource(fileName);
-            } catch (IOException e) {
-                Log.e("RNSoundModule", "Exception", e);
-                return null;
-            }
-            return mediaPlayer;
-        }
-
-        File file = new File(fileName);
-        if (file.exists()) {
-            mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
-            Log.i("RNSoundModule", fileName);
-            try {
-                mediaPlayer.setDataSource(fileName);
-            } catch (IOException e) {
-                Log.e("RNSoundModule", "Exception", e);
-                return null;
-            }
-            return mediaPlayer;
-        }
-
         return null;
     }
 
