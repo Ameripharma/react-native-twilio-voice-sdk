@@ -19,11 +19,11 @@ import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
 
-import com.twilio.audioswitch.AudioDevice;
-import com.twilio.audioswitch.AudioSwitch;
 import kotlin.Unit;
 import kotlin.jvm.functions.Function2;
 
+import com.twilio.audioswitch.AudioDevice;
+import com.twilio.audioswitch.AudioSwitch;
 import com.twilio.audioswitch.AudioDevice.Speakerphone;
 import com.twilio.audioswitch.AudioDevice.BluetoothHeadset;
 import com.twilio.audioswitch.AudioDevice.WiredHeadset;
@@ -51,7 +51,7 @@ import static com.happytheapp.react.RNTwilioVoiceSDK.EventManager.EVENT_RECONNEC
 import static com.happytheapp.react.RNTwilioVoiceSDK.EventManager.EVENT_DISCONNECTED;
 
 public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule
-        implements LifecycleEventListener, AudioManager.OnAudioFocusChangeListener {
+        implements LifecycleEventListener {
 
     public static String TAG = "RNTwilioVoiceSDK";
 
@@ -61,7 +61,6 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule
     private Boolean headsetConnected = false;
     private Boolean speaker = false;
     private Call activeCall;
-    private AudioFocusManager audioFocusManager;
     private ProximityManager proximityManager;
     private EventManager eventManager;
     protected MediaPlayer mediaPlayer;
@@ -77,7 +76,6 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule
         reactContext.addLifecycleEventListener(this);
         context = reactContext;
         eventManager = new EventManager(reactContext);
-        audioFocusManager = new AudioFocusManager(reactContext);
         proximityManager = new ProximityManager(reactContext);
         audioSwitch = new AudioSwitch(reactContext);
         audioSwitch.start(new Function2<List<? extends AudioDevice>, AudioDevice, Unit>() {
@@ -91,6 +89,7 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule
     // region Lifecycle Event Listener
     @Override
     public void onHostResume() {
+        Log.d("TZ", "HOST RESUME");
         /*
          * Enable changing the volume using the up/down keys during a conversation
          */
@@ -107,8 +106,8 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule
 
     @Override
     public void onHostDestroy() {
+        Log.d("TZ", "HOST DESTROY");
         disconnect();
-        audioFocusManager.unsetAudioFocus();
         audioSwitch.stop();
     }
     // endregion
@@ -156,7 +155,6 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule
                     Log.d(TAG, "call disconnected");
                 }
                 activeCall = call;
-                audioFocusManager.unsetAudioFocus();
                 eventManager.sendEvent(EVENT_DISCONNECTED, paramsWithError(call, error));
                 call.disconnect();
                 activeCall = null;
@@ -171,7 +169,6 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule
                 mediaPlayer.pause();
                 mediaPlayer.seekTo(0);
                 audioSwitch.deactivate();
-                audioFocusManager.unsetAudioFocus();
                 WritableMap params = paramsWithError(call, error);
                 call.disconnect();
                 activeCall = null;
@@ -187,11 +184,6 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule
                 eventManager.sendEvent(EVENT_RINGING, paramsFromCall(call));
             }
         };
-    }
-
-    @Override
-    public void onAudioFocusChange(int focusChange) {
-
     }
 
     protected MediaPlayer createMediaPlayer(final String fileName) {
@@ -317,7 +309,8 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule
             this.mediaPlayer.setLooping(true);
             this.mediaPlayer.start();
         }
-        manipulateAudioManagerBasedOnBLE();
+        audioSwitch.activate();
+        deriveAudioOutputSource();
         promise.resolve(paramsFromCall(activeCall));
     }
 
@@ -328,7 +321,6 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule
             mediaPlayer.seekTo(0);
             audioSwitch.deactivate();
             setMuted(false);
-            disableSpeakerPhone();
             proximityManager.stopProximitySensor();
             activeCall.disconnect();
             activeCall = null;
@@ -366,14 +358,16 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule
         promise.reject("no_call", "There was no active call");
     }
 
-    private void manipulateAudioManagerBasedOnBLE() {
+    private void deriveAudioOutputSource() {
         if(speaker) {
+            Log.d("TZ", "SWITCHING TO SPEAKER");
             audioSwitch.selectDevice(new Speakerphone());
         } else {
-             List<AudioDevice> devices = audioSwitch.getAvailableAudioDevices();
+            Log.d("TZ", "SWITCHING TO DIFFERENT OUTPUT");
+            List<AudioDevice> devices = audioSwitch.getAvailableAudioDevices();
             Boolean bt = false;
             Boolean wired = false;
-
+    
             for(AudioDevice dev : devices){
                 if (dev instanceof BluetoothHeadset) {
                     bt = true;
@@ -381,7 +375,7 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule
                     wired = true;
                 }
             }
-
+    
             if(bt) {
                 audioSwitch.selectDevice(new BluetoothHeadset());
             } else if(wired) {
@@ -390,18 +384,14 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule
                 audioSwitch.selectDevice(new Earpiece());
             }
         }
-        audioSwitch.activate();
     }
 
     @ReactMethod
     public void setSpeakerPhone(Boolean value) {
         speaker = value;
-        manipulateAudioManagerBasedOnBLE();
+        deriveAudioOutputSource();
     }
 
-    private void disableSpeakerPhone() {
-        audioFocusManager.setSpeakerPhone(false);
-    }
 
     // region create JSObjects helpers
     private WritableMap paramsFromCall(Call call) {
