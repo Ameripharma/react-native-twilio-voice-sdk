@@ -61,7 +61,6 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule
     private Boolean headsetConnected = false;
     private Boolean speaker = false;
     private Call activeCall;
-    private AudioFocusManager audioFocusManager;
     private ProximityManager proximityManager;
     private EventManager eventManager;
     protected MediaPlayer mediaPlayer;
@@ -77,26 +76,26 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule
         reactContext.addLifecycleEventListener(this);
         context = reactContext;
         eventManager = new EventManager(reactContext);
-        audioFocusManager = new AudioFocusManager(reactContext);
         proximityManager = new ProximityManager(reactContext);
         audioSwitch = new AudioSwitch(reactContext);
+    }
+
+    // region Lifecycle Event Listener
+    @Override
+    public void onHostResume() {
         audioSwitch.start(new Function2<List<? extends AudioDevice>, AudioDevice, Unit>() {
             @Override
             public Unit invoke(List<? extends AudioDevice> audioDevices, AudioDevice audioDevice) {
                 return Unit.INSTANCE;
             }
         });
-    }
-
-    // region Lifecycle Event Listener
-    @Override
-    public void onHostResume() {
         /*
          * Enable changing the volume using the up/down keys during a conversation
          */
         if (getCurrentActivity() != null) {
             getCurrentActivity().setVolumeControlStream(AudioManager.STREAM_VOICE_CALL);
         }
+
     }
 
     @Override
@@ -108,7 +107,6 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule
     @Override
     public void onHostDestroy() {
         disconnect();
-        audioFocusManager.unsetAudioFocus();
         audioSwitch.stop();
     }
     // endregion
@@ -129,7 +127,6 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule
                 eventManager.sendEvent(EVENT_CONNECTED, paramsFromCall(call));
 
                 mediaPlayer.pause();
-                mediaPlayer.seekTo(0);
             }
 
             @Override
@@ -156,9 +153,9 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule
                     Log.d(TAG, "call disconnected");
                 }
                 activeCall = call;
-                audioFocusManager.unsetAudioFocus();
                 eventManager.sendEvent(EVENT_DISCONNECTED, paramsWithError(call, error));
                 call.disconnect();
+                disconnectCleanup();
                 activeCall = null;
             }
 
@@ -168,10 +165,7 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule
                     Log.d(TAG, "connect failure");
                 }
                 activeCall = call;
-                mediaPlayer.pause();
-                mediaPlayer.seekTo(0);
-                audioSwitch.deactivate();
-                audioFocusManager.unsetAudioFocus();
+                disconnectCleanup();
                 WritableMap params = paramsWithError(call, error);
                 call.disconnect();
                 activeCall = null;
@@ -202,54 +196,6 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule
                 AssetFileDescriptor afd = this.context.getResources().openRawResourceFd(res);
                 mediaPlayer.setDataSource(afd.getFileDescriptor(), afd.getStartOffset(), afd.getLength());
                 afd.close();
-            } catch (IOException e) {
-                Log.e("RNSoundModule", "Exception", e);
-                return null;
-            }
-            return mediaPlayer;
-        }
-
-        if (fileName.startsWith("http://") || fileName.startsWith("https://")) {
-            mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
-            Log.i("RNSoundModule", fileName);
-            try {
-                mediaPlayer.setDataSource(fileName);
-            } catch (IOException e) {
-                Log.e("RNSoundModule", "Exception", e);
-                return null;
-            }
-            return mediaPlayer;
-        }
-
-        if (fileName.startsWith("asset:/")) {
-            try {
-                AssetFileDescriptor descriptor = this.context.getAssets().openFd(fileName.replace("asset:/", ""));
-                mediaPlayer.setDataSource(descriptor.getFileDescriptor(), descriptor.getStartOffset(),
-                        descriptor.getLength());
-                descriptor.close();
-                return mediaPlayer;
-            } catch (IOException e) {
-                Log.e("RNSoundModule", "Exception", e);
-                return null;
-            }
-        }
-
-        if (fileName.startsWith("file:/")) {
-            try {
-                mediaPlayer.setDataSource(fileName);
-            } catch (IOException e) {
-                Log.e("RNSoundModule", "Exception", e);
-                return null;
-            }
-            return mediaPlayer;
-        }
-
-        File file = new File(fileName);
-        if (file.exists()) {
-            mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
-            Log.i("RNSoundModule", fileName);
-            try {
-                mediaPlayer.setDataSource(fileName);
             } catch (IOException e) {
                 Log.e("RNSoundModule", "Exception", e);
                 return null;
@@ -315,21 +261,23 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule
         activeCall = Voice.connect(getReactApplicationContext(), connectOptions, callListener);
         if (activeCall != null) {
             this.mediaPlayer.setLooping(true);
+            this.mediaPlayer.seekTo(0);
             this.mediaPlayer.start();
         }
-        manipulateAudioManagerBasedOnBLE();
+        deriveAudioOutputTarget();
         promise.resolve(paramsFromCall(activeCall));
+    }
+
+    public void disconnectCleanup() {
+        mediaPlayer.pause();
+        audioSwitch.deactivate();
+        setMuted(false);
+        proximityManager.stopProximitySensor();
     }
 
     @ReactMethod
     public void disconnect() {
         if (activeCall != null) {
-            mediaPlayer.pause();
-            mediaPlayer.seekTo(0);
-            audioSwitch.deactivate();
-            setMuted(false);
-            disableSpeakerPhone();
-            proximityManager.stopProximitySensor();
             activeCall.disconnect();
             activeCall = null;
         }
@@ -366,25 +314,25 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule
         promise.reject("no_call", "There was no active call");
     }
 
-    private void manipulateAudioManagerBasedOnBLE() {
-        if(speaker) {
+    private void deriveAudioOutputTarget() {
+        if (speaker) {
             audioSwitch.selectDevice(new Speakerphone());
         } else {
-             List<AudioDevice> devices = audioSwitch.getAvailableAudioDevices();
+            List<AudioDevice> devices = audioSwitch.getAvailableAudioDevices();
             Boolean bt = false;
             Boolean wired = false;
 
-            for(AudioDevice dev : devices){
+            for (AudioDevice dev : devices) {
                 if (dev instanceof BluetoothHeadset) {
                     bt = true;
-                } else if(dev instanceof WiredHeadset) {
+                } else if (dev instanceof WiredHeadset) {
                     wired = true;
                 }
             }
 
-            if(bt) {
+            if (bt) {
                 audioSwitch.selectDevice(new BluetoothHeadset());
-            } else if(wired) {
+            } else if (wired) {
                 audioSwitch.selectDevice(new WiredHeadset());
             } else {
                 audioSwitch.selectDevice(new Earpiece());
@@ -396,11 +344,11 @@ public class TwilioVoiceSDKModule extends ReactContextBaseJavaModule
     @ReactMethod
     public void setSpeakerPhone(Boolean value) {
         speaker = value;
-        manipulateAudioManagerBasedOnBLE();
+        deriveAudioOutputTarget();
     }
 
     private void disableSpeakerPhone() {
-        audioFocusManager.setSpeakerPhone(false);
+        // audioFocusManager.setSpeakerPhone(false);
     }
 
     // region create JSObjects helpers

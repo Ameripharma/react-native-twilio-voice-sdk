@@ -1,6 +1,6 @@
 {
   "name": "@nowrx/react-native-twilio-voice-sdk",
-  "version": "0.5.6",
+  "version": "0.5.7-beta.1",
   "description": "React Native wrapper for Twilio Programmable Voice SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
